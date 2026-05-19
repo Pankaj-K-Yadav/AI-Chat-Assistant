@@ -1,0 +1,148 @@
+import React, { useState, useEffect, useRef } from "react";
+
+import ChatBody from "../components/ChatBody";
+import ChatInput from "../components/ChatInput";
+
+const Chat = () => {
+  const [chatMessages, setChatMessages] = useState([]);
+  const [userInput, setUserInput] = useState("");
+  const [isChatbotTyping, setIsChatbotTyping] = useState(false);
+  const [typingIntervalId, setTypingIntervalId] = useState(null);
+  const [typingIndicatorMessage, setTypingIndicatorMessage] =
+    useState("Typing");
+
+  const EXPRESS_PORT = 3000;
+
+  const firstRender = useRef(true);
+
+  const displayUserMessage = (message) => {
+    setChatMessages((prevChatMessages) => [
+      ...prevChatMessages,
+      { message, type: "user" },
+    ]);
+
+    setUserInput("");
+  };
+
+  const displayChatbotMessage = (message) => {
+    if (isChatbotTyping) {
+      clearInterval(typingIntervalId);
+      setIsChatbotTyping(false);
+    }
+
+    setChatMessages((prevChatMessages) => [
+      ...prevChatMessages,
+      { message, type: "chatbot" },
+    ]);
+  };
+
+  const displayTypingIndicator = () => {
+    if (!isChatbotTyping) {
+      setIsChatbotTyping(true);
+
+      clearInterval(typingIntervalId);
+
+      const intervalId = setInterval(() => {
+        setTypingIndicatorMessage((prevMessage) => {
+          if (prevMessage === "Typing...") {
+            return "Typing";
+          } else if (prevMessage === "Typing") {
+            return "Typing.";
+          } else if (prevMessage === "Typing.") {
+            return "Typing..";
+          } else {
+            return "Typing...";
+          }
+        });
+      }, 400);
+
+      setTypingIntervalId(intervalId);
+    }
+  };
+
+  const sendMessage = async () => {
+    if (userInput.trim() === "") {
+      return;
+    }
+
+    displayUserMessage(userInput);
+    displayTypingIndicator();
+
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:${EXPRESS_PORT}/message`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+
+          body: JSON.stringify({
+            content: userInput,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Network response was not ok");
+      }
+
+      const data = await response.json();
+
+      displayChatbotMessage(data.content);
+
+      setIsChatbotTyping(false);
+    } catch (error) {
+      console.error("Error:", error);
+
+      displayChatbotMessage(
+        `Sorry an error has occurred... (${error.message})`
+      );
+
+      setIsChatbotTyping(false);
+    }
+  };
+
+  const handleInputChange = (e) => {
+    setUserInput(e.target.value);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+
+      displayChatbotMessage(
+        "Hi, I'm an AI Chatbot. What can I help you with today?"
+      );
+    }
+  }, []);
+
+  return (
+    <div className="chat-container">
+      <div className="chat-title">Chatbot</div>
+
+      <ChatBody
+        chatMessages={chatMessages}
+        isChatbotTyping={isChatbotTyping}
+        typingIndicatorMessage={typingIndicatorMessage}
+      />
+
+      <ChatInput
+        value={userInput}
+        onChange={handleInputChange}
+        onKeyDown={handleKeyDown}
+        placeholder="Type your message here..."
+        onClick={sendMessage}
+      />
+    </div>
+  );
+};
+
+export default Chat;
